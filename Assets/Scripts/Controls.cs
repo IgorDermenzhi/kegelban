@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Xml.Serialization;
 using UnityEngine;
 using UnityEngine.UI; // Text, Image, Button
 
@@ -7,6 +9,8 @@ public class Controls : MonoBehaviour
 {
     private const float MIN_FORCE = 1000f;
     private const float MAX_FORCE = 2000f;
+    private const string BEST_RES_FILE = "best.xml";
+
     private GameObject Indicator;
     
     private GameObject Ball;
@@ -25,13 +29,19 @@ public class Controls : MonoBehaviour
     private int attempt;
 
     private GameObject GameMenu;
-     
+
+    private List<GameResult> bestResults; // таблица рекордов
+
+    private GameObject DisplayResults;
+    private Text TextBestResults;
 
     // Start is called before the first frame update
     void Start()
     {
         GameMenu = GameObject.Find("Menu");
         Menu.MenuMode = MenuMode.Start;
+        DisplayResults = GameObject.Find("DisplayResults");
+        TextBestResults = GameObject.Find("Results").GetComponent<Text>();
 
         attempt = 0;
         GameStat = GameObject.Find("GameStat").GetComponent<Text>();
@@ -50,6 +60,7 @@ public class Controls : MonoBehaviour
         // Толкнуть шарик - приложить силу к его твердому телу
         ballRigidbody = Ball.GetComponent<Rigidbody>();
         IsBallMoving = false;
+        LoadBestResults();
     }
 
     // Update is called once per frame
@@ -62,8 +73,16 @@ public class Controls : MonoBehaviour
             Menu.IsActive = true;
             Menu.MenuMode= MenuMode.Pause;
         }
-            #region Остановка шарика
-            if (ballRigidbody.velocity.magnitude < 0.2f && IsBallMoving)
+        if (Input.GetKeyDown(KeyCode.B))
+        {
+            GameMenu.SetActive(true);
+            Menu.IsActive = true;
+            Menu.MenuMode = MenuMode.Pause;
+            DisplayResults.SetActive(true);
+        }
+
+        #region Остановка шарика
+        if (ballRigidbody.velocity.magnitude < 0.2f && IsBallMoving)
         {
             // считаем за остановку
             Debug.Log("Ball stopped");
@@ -166,5 +185,65 @@ public class Controls : MonoBehaviour
         //Debug.Log("Click");
         GameMenu.SetActive(false);
         Menu.IsActive = false;
+        DisplayResults.SetActive(false);
+    }
+
+    private void LoadBestResults()
+    {
+        //файл с результатами
+        if(File.Exists(BEST_RES_FILE))
+        {
+            using(StreamReader reader = new StreamReader(BEST_RES_FILE))
+            {
+                XmlSerializer serializer = new XmlSerializer(
+                    typeof(List<GameResult>));
+                bestResults = (List<GameResult>)serializer.Deserialize(reader);
+                bestResults.Sort();
+            }
+            foreach(var res in bestResults)
+            {
+                // Debug.Log(res);
+                TextBestResults.text += "\n" + res;
+            }
+        }
+        else
+        {
+            bestResults = new List<GameResult>();
+            bestResults.Add(new GameResult { Balls = 20, Time = 200 });
+            bestResults.Add(new GameResult { Balls = 30, Time = 300 });
+            bestResults.Add(new GameResult { Balls = 10, Time = 100 });
+        }
+            using(StreamWriter writer = new StreamWriter(BEST_RES_FILE))
+            {
+                XmlSerializer serializer = new XmlSerializer(
+                    bestResults.GetType());
+                serializer.Serialize(writer, bestResults);
+            }
     }
 }
+
+
+public class GameResult : System.IComparable<GameResult>
+{
+        public int Balls { get; set; }  // броски
+        public float Time { get; set; } // время раунда
+
+    public int CompareTo(GameResult y)
+    {
+        if (this.Balls < y.Balls) return -1;
+        else if (this.Balls == y.Balls)
+        {
+            if (this.Time < y.Time) return -1;
+            else if (this.Time == y.Time) return 0;
+        }
+        return 1;
+    }
+
+    public override string ToString()
+    {
+        return "Balls: " + Balls + ", Time: " + Time;
+    }
+
+}
+
+
